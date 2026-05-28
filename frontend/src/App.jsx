@@ -1,117 +1,51 @@
-import { useEffect, useState } from 'react'
-import './App.css'
-import { auth } from './firebaseConfig'
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-} from 'firebase/auth'
-
-function App() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [user, setUser] = useState(null)
-  const [message, setMessage] = useState('Please sign in or sign up')
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
-      if (currentUser) {
-        setMessage(`Signed in as ${currentUser.email}`)
-      } else {
-        setMessage('Please sign in or sign up')
-      }
-    })
-    return unsubscribe
-  }, [])
-
-  const handleSignUp = async () => {
-    setLoading(true)
-    setMessage('Creating account...')
-    try {
-      await createUserWithEmailAndPassword(auth, email, password)
-      setMessage('Account created! You are signed in.')
-    } catch (err) {
-      setMessage(`Sign-up error: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
+import { BrowserRouter, Routes, Route, Navigate } from "react-router";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import AdminDashboard from "./pages/AdminDashboard";
+import CustomerDashboard from "./pages/CustomerDashboard";
+function ProtectedRoute({
+  children,
+  role
+}) {
+  const { user } = useAuth();
+  if (!user) return <Navigate to="/login" replace />;
+  if (user.role !== role) {
+    return <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace />;
   }
-
-  const handleSignIn = async () => {
-    setLoading(true)
-    setMessage('Signing in...')
-    try {
-      await signInWithEmailAndPassword(auth, email, password)
-      setMessage('Signed in successfully.')
-    } catch (err) {
-      setMessage(`Sign-in error: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleSignOut = async () => {
-    setLoading(true)
-    setMessage('Signing out...')
-    try {
-      await signOut(auth)
-      setMessage('Signed out successfully.')
-    } catch (err) {
-      setMessage(`Sign-out error: ${err.message}`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="auth-container">
-      <h1>Firebase Email/Password Auth</h1>
-      <p>{message}</p>
-
-      {user ? (
-        <div className="signed-in">
-          <p>
-            Signed in as <strong>{user.email}</strong>
-          </p>
-          <button onClick={handleSignOut} disabled={loading}>
-            Sign out
-          </button>
-        </div>
-      ) : (
-        <div className="auth-form">
-          <label>
-            Email
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-            />
-          </label>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Minimum 6 characters"
-            />
-          </label>
-          <div className="button-row">
-            <button onClick={handleSignIn} disabled={loading || !email || !password}>
-              Sign in
-            </button>
-            <button onClick={handleSignUp} disabled={loading || !email || !password}>
-              Sign up
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
+  return <>{children}</>;
 }
-
-export default App
+function AppRoutes() {
+  const { user } = useAuth();
+  return <Routes>
+      <Route
+    path="/"
+    element={user ? <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace /> : <Navigate to="/login" replace />}
+  />
+      <Route path="/login" element={user ? <Navigate to={user.role === "admin" ? "/admin" : "/dashboard"} replace /> : <Login />} />
+      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <Register />} />
+      <Route
+    path="/admin"
+    element={<ProtectedRoute role="admin">
+            <AdminDashboard />
+          </ProtectedRoute>}
+  />
+      <Route
+    path="/dashboard"
+    element={<ProtectedRoute role="customer">
+            <CustomerDashboard />
+          </ProtectedRoute>}
+  />
+      <Route path="*" element={<Navigate to="/login" replace />} />
+    </Routes>;
+}
+function App() {
+  return <AuthProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </AuthProvider>;
+}
+export {
+  App as default
+};
